@@ -210,42 +210,24 @@ const char *sys_user_path(void)
 
     WCHAR widePath[SYS_MAX_PATH];
 
-    // "%USERPROFILE%\AppData\Roaming"
-    WCHAR *wcsAppDataPath = NULL;
-    HRESULT res = SHGetKnownFolderPath(
-        &(FOLDERID_RoamingAppData),
-        (KF_FLAG_CREATE  | KF_FLAG_DONT_UNEXPAND),
-        NULL, &(wcsAppDataPath));
-
-    if (S_OK != res)
-    {
-        if (NULL != wcsAppDataPath) { CoTaskMemFree(wcsAppDataPath); }
+    // Get the directory of the executable
+    const char *exeDir = sys_exe_path_dir();
+    if (!exeDir || !exeDir[0]) {
         return NULL;
     }
 
-    LPCWSTR subdirs[] = { L"sm64coopdx", L"sm64ex-coop", L"sm64coopdx", NULL };
-
-    for (int i = 0; NULL != subdirs[i]; i++)
-    {
-        if (_snwprintf(widePath, SYS_MAX_PATH, L"%s\\%s", wcsAppDataPath, subdirs[i]) <= 0) { return NULL; }
-
-        // Directory already exists.
-        if (FALSE != PathIsDirectoryW(widePath))
-        {
-            // Directory is not empty, so choose this name.
-            if (FALSE == PathIsDirectoryEmptyW(widePath)) { break; }
-        }
-
-        // 'widePath' will hold the last checked subdir name.
+    // Build the path: %EXEDIR%\AppData
+    int n = MultiByteToWideChar(CP_UTF8, 0, exeDir, -1, widePath, SYS_MAX_PATH);
+    if (n == 0) {
+        return NULL;
     }
+    if (wcslen(widePath) + wcslen(L"\\AppData") + 1 >= SYS_MAX_PATH) {
+        return NULL;
+    }
+    wcscat(widePath, L"\\AppData");
 
-    // System resource can be safely released now.
-    if (NULL != wcsAppDataPath) { CoTaskMemFree(wcsAppDataPath); }
-
-    // Always try to create the directory pointed to by User Path,
-    // but ignore errors if the destination already exists.
-    if (FALSE == CreateDirectoryW(widePath, NULL))
-    {
+    // Always try to create the directory, ignore error if it already exists
+    if (FALSE == CreateDirectoryW(widePath, NULL)) {
         if (ERROR_ALREADY_EXISTS != GetLastError()) { return NULL; }
     }
 
